@@ -75,6 +75,8 @@ func (tr *TaskRunner) initHooks() {
 		tr.runnerHooks = append(tr.runnerHooks, newCSIPluginSupervisorHook(filepath.Join(tr.clientConfig.StateDir, "csi"), tr, tr, hookLogger))
 	}
 
+	tr.runnerHooks = append(tr.runnerHooks, newNixHook(tr, hookLogger))
+
 	// If Vault is enabled, add the hook
 	if task.Vault != nil {
 		tr.runnerHooks = append(tr.runnerHooks, newVaultHook(&vaultHookConfig{
