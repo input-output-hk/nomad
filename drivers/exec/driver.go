@@ -89,6 +89,9 @@ var (
 		"ipc_mode": hclspec.NewAttr("ipc_mode", "string", false),
 		"cap_add":  hclspec.NewAttr("cap_add", "list(string)", false),
 		"cap_drop": hclspec.NewAttr("cap_drop", "list(string)", false),
+		"flake":      hclspec.NewAttr("flake", "string", false),
+		"flake_args": hclspec.NewAttr("flake_args", "list(string)", false),
+		"flake_deps": hclspec.NewAttr("flake_deps", "list(string)", false),
 	})
 
 	// driverCapabilities represents the RPC response for what features are
@@ -195,6 +198,7 @@ type TaskConfig struct {
 
 	// CapDrop is a set of linux capabilities to disable.
 	CapDrop []string `codec:"cap_drop"`
+	Flake   *string `codec:"flake"`
 }
 
 func (tc *TaskConfig) validate() error {
