@@ -180,8 +180,8 @@ func (h *nixHook) nixBuild(flake string, flakeArgs []string, taskDir string) err
 
 func (h *nixHook) outPath(flake string, flakeArgs []string) (string, error) {
 	// Then get the path to the derivation output
-	args := []string{"eval", "--raw"}
-	args = append(append(args, flakeArgs...), flake+".outPath")
+	args := []string{"eval", "--raw", "--apply", "(pkg: pkg.outPath)"}
+	args = append(append(args, flakeArgs...), flake)
 	cmd := exec.Command("nix", args...)
 	nixEvalOutput, err := cmd.Output()
 	path := string(nixEvalOutput)
