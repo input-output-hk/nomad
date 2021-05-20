@@ -347,6 +347,9 @@ github.com/gorilla/mux
 # github.com/gorilla/websocket v1.4.2
 ## explicit
 github.com/gorilla/websocket
+# github.com/gosuri/uilive v0.0.4
+## explicit
+github.com/gosuri/uilive
 # github.com/grpc-ecosystem/go-grpc-middleware v1.2.1-0.20200228141219-3ce3d519df39
 ## explicit
 github.com/grpc-ecosystem/go-grpc-middleware/retry
