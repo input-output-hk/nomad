@@ -148,7 +148,7 @@ func linkPath(flake string, flakeArgs []string, taskDir string) string {
 }
 
 func (h *nixHook) profileInstall(linkPath, flake string, flakeArgs []string) error {
-	args := []string{"profile", "install", "--profile", linkPath}
+	args := []string{"profile", "install", "--no-write-lock-file", "--profile", linkPath}
 	args = append(append(args, flakeArgs...), flake)
 	cmd := exec.Command("nix", args...)
 	output, err := cmd.CombinedOutput()
