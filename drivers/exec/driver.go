@@ -201,7 +201,6 @@ type TaskConfig struct {
   CapDrop []string `codec:"cap_drop"`
 
   Flake   *string `codec:"flake"`
-  FlakeDeps []string `codec:"flake_deps"`
 }
 
 func (tc *TaskConfig) validate() error {
