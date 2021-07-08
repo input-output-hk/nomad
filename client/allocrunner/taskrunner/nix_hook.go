@@ -60,25 +60,32 @@ func (h *nixHook) Prestart(ctx context.Context, req *interfaces.TaskPrestartRequ
 		return nil
 	}
 
-	configFlake, ok := req.Task.Config["flake"]
-	if !ok {
-		return nil
-	}
+	flakes := []string{}
+	flakeArgs := []string{}
 
-	flake, ok := configFlake.(string)
-	if !ok {
-		return nil
-	}
+	configFlakeDeps, flakeDepsSet := req.Task.Config["flake_deps"]
+	configFlake, flakeSet := req.Task.Config["flake"]
+	configFlakeArgs, flakeArgsSet := req.Task.Config["flake_args"]
 
-	configFlakeArgs, ok := req.Task.Config["flake_args"]
-	if ok {
-		flakeArgs, ok := configFlakeArgs.([]string)
-		if ok {
-			return h.install(flake, flakeArgs, req.TaskDir.Dir)
+	if flakeDepsSet {
+		for _, dep := range configFlakeDeps.([]interface{}) {
+			flakes = append(flakes, dep.(string))
 		}
 	}
 
-	return h.install(flake, []string{}, req.TaskDir.Dir)
+	if flakeSet {
+		flakes = append(flakes, configFlake.(string))
+	}
+
+	if flakeArgsSet {
+		flakeArgs = configFlakeArgs.([]string)
+	}
+
+	if len(flakes) == 0 {
+		return nil
+	}
+
+	return h.install(flakes, flakeArgs, req.TaskDir.Dir)
 }
 
 // install takes a flake URL like:
@@ -87,28 +94,15 @@ func (h *nixHook) Prestart(ctx context.Context, req *interfaces.TaskPrestartRequ
 // github:NixOS/nixpkgs?rev=04b19784342ac2d32f401b52c38a43a1352cd916#cowsay
 //
 // the given flake
-func (h *nixHook) install(flake string, flakeArgs []string, taskDir string) error {
-	linkPath := linkPath(flake, flakeArgs, taskDir)
+func (h *nixHook) install(flakes []string, flakeArgs []string, taskDir string) error {
+	linkPath := linkPath(flakes, flakeArgs, taskDir)
 	_, err := os.Stat(linkPath)
 	if err == nil {
 		return nil
 	}
 
-	h.logger.Debug("Building flake", "flake", flake)
-	h.emitEvent("Nix", "building flake: "+flake)
-
-	if err = h.profileInstall(linkPath, flake, flakeArgs); err != nil {
-		return err
-	}
-
-	outPath, err := h.outPath(flake, flakeArgs)
-	if err != nil {
-		return err
-	}
-	requisites, err := h.requisites(outPath)
-	if err != nil {
-		return err
-	}
+	h.logger.Debug("Building flakes", "flake", flakes)
+	h.emitEvent("Nix", "building flakes: "+strings.Join(flakes, " "))
 
 	taskDirInfo, err := os.Stat(taskDir)
 	if err != nil {
@@ -117,13 +111,28 @@ func (h *nixHook) install(flake string, flakeArgs []string, taskDir string) erro
 
 	uid, gid := getOwner(taskDirInfo)
 
-	// Now copy each dependency into the allocation /nix/store directory
-	for _, requisit := range requisites {
-		h.logger.Debug("linking", "requisit", requisit)
+	for _, flake := range flakes {
+		if err = h.profileInstall(linkPath, flake, flakeArgs); err != nil {
+			return err
+		}
 
-		err = filepath.Walk(requisit, copyAll(h.logger, taskDir, false, uid, gid))
+		outPath, err := h.outPath(flake, flakeArgs)
 		if err != nil {
 			return err
+		}
+		requisites, err := h.requisites(outPath)
+		if err != nil {
+			return err
+		}
+
+		// Now copy each dependency into the allocation /nix/store directory
+		for _, requisit := range requisites {
+			h.logger.Debug("linking", "requisit", requisit)
+
+			err = filepath.Walk(requisit, copyAll(h.logger, taskDir, false, uid, gid))
+			if err != nil {
+				return err
+			}
 		}
 	}
 
@@ -137,8 +146,13 @@ func (h *nixHook) install(flake string, flakeArgs []string, taskDir string) erro
 	return filepath.Walk(link, copyAll(h.logger, taskDir, true, uid, gid))
 }
 
-func linkPath(flake string, flakeArgs []string, taskDir string) string {
-	parts := []byte(flake)
+func linkPath(flakes []string, flakeArgs []string, taskDir string) string {
+	parts := []byte{}
+
+	for _, flake := range flakes {
+		parts = append(parts, []byte(flake)...)
+	}
+
 	for _, part := range flakeArgs {
 		parts = append(parts, []byte(part)...)
 	}
@@ -147,7 +161,10 @@ func linkPath(flake string, flakeArgs []string, taskDir string) string {
 	return filepath.Join(taskDir, hash)
 }
 
-func (h *nixHook) profileInstall(linkPath, flake string, flakeArgs []string) error {
+func (h *nixHook) profileInstall(linkPath string, flake string, flakeArgs []string) error {
+	h.logger.Debug("Building flake", "flake", flake)
+	h.emitEvent("Nix", "building flake: "+flake)
+
 	args := []string{"profile", "install", "--no-write-lock-file", "--profile", linkPath}
 	args = append(append(args, flakeArgs...), flake)
 	cmd := exec.Command("nix", args...)
@@ -157,6 +174,7 @@ func (h *nixHook) profileInstall(linkPath, flake string, flakeArgs []string) err
 
 	if err != nil {
 		h.logger.Error(cmd.String(), "output", string(output), "error", err)
+		h.emitEvent("Nix", "build failed with error: "+err.Error()+" output: "+string(output))
 		return err
 	}
 

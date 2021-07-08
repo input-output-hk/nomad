@@ -92,6 +92,7 @@ var (
     "cap_drop": hclspec.NewAttr("cap_drop", "list(string)", false),
     "flake":      hclspec.NewAttr("flake", "string", false),
     "flake_args": hclspec.NewAttr("flake_args", "list(string)", false),
+    "flake_deps": hclspec.NewAttr("flake_deps", "list(string)", false),
   })
 
   // driverCapabilities represents the RPC response for what features are
@@ -200,6 +201,7 @@ type TaskConfig struct {
   CapDrop []string `codec:"cap_drop"`
 
   Flake   *string `codec:"flake"`
+  FlakeDeps []string `codec:"flake_deps"`
 }
 
 func (tc *TaskConfig) validate() error {
