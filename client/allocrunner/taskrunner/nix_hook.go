@@ -114,24 +114,20 @@ func (h *nixHook) install(flakes []string, flakeArgs []string, taskDir string) e
 		if err = h.profileInstall(linkPath, flake, flakeArgs); err != nil {
 			return err
 		}
+	}
 
-		outPath, err := h.outPath(flake, flakeArgs)
+	requisites, err := h.requisites(linkPath)
+	if err != nil {
+		return err
+	}
+
+	// Now copy each dependency into the allocation /nix/store directory
+	for _, requisit := range requisites {
+		h.logger.Debug("linking", "requisit", requisit)
+
+		err = filepath.Walk(requisit, copyAll(h.logger, taskDir, false, uid, gid))
 		if err != nil {
 			return err
-		}
-		requisites, err := h.requisites(outPath)
-		if err != nil {
-			return err
-		}
-
-		// Now copy each dependency into the allocation /nix/store directory
-		for _, requisit := range requisites {
-			h.logger.Debug("linking", "requisit", requisit)
-
-			err = filepath.Walk(requisit, copyAll(h.logger, taskDir, false, uid, gid))
-			if err != nil {
-				return err
-			}
 		}
 	}
 
