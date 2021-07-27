@@ -2,7 +2,6 @@ package taskrunner
 
 import (
 	"context"
-	"crypto/sha256"
 	"fmt"
 	"io"
 	"os"
@@ -95,7 +94,7 @@ func (h *nixHook) Prestart(ctx context.Context, req *interfaces.TaskPrestartRequ
 //
 // the given flake
 func (h *nixHook) install(flakes []string, flakeArgs []string, taskDir string) error {
-	linkPath := linkPath(flakes, flakeArgs, taskDir)
+	linkPath := filepath.Join(taskDir, "current-alloc")
 	_, err := os.Stat(linkPath)
 	if err == nil {
 		return nil
@@ -144,21 +143,6 @@ func (h *nixHook) install(flakes []string, flakeArgs []string, taskDir string) e
 	h.logger.Debug("linking main drv paths", "linkPath", linkPath, "link", link)
 
 	return filepath.Walk(link, copyAll(h.logger, taskDir, true, uid, gid))
-}
-
-func linkPath(flakes []string, flakeArgs []string, taskDir string) string {
-	parts := []byte{}
-
-	for _, flake := range flakes {
-		parts = append(parts, []byte(flake)...)
-	}
-
-	for _, part := range flakeArgs {
-		parts = append(parts, []byte(part)...)
-	}
-
-	hash := fmt.Sprintf("%x", sha256.Sum256(parts))
-	return filepath.Join(taskDir, hash)
 }
 
 func (h *nixHook) profileInstall(linkPath string, flake string, flakeArgs []string) error {
