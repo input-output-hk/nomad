@@ -14,7 +14,6 @@ replace (
 )
 
 require (
-	cloud.google.com/go/storage v1.0.0 // indirect
 	github.com/Azure/go-autorest/autorest v0.11.4 // indirect
 	github.com/Azure/go-autorest/autorest/azure/auth v0.5.1 // indirect
 	github.com/LK4D4/joincontext v0.0.0-20171026170139-1724345da6d5
@@ -45,7 +44,7 @@ require (
 	github.com/fatih/color v1.9.0
 	github.com/fsnotify/fsnotify v1.4.9 // indirect
 	github.com/fsouza/go-dockerclient v1.6.5
-	github.com/golang/protobuf v1.5.0
+	github.com/golang/protobuf v1.5.2
 	github.com/golang/snappy v0.0.2
 	github.com/google/go-cmp v0.5.5
 	github.com/gorilla/websocket v1.4.2
@@ -109,8 +108,8 @@ require (
 	github.com/opencontainers/runtime-spec v1.0.3-0.20200929063507-e6143ca7d51d
 	github.com/pkg/errors v0.9.1
 	github.com/posener/complete v1.2.3
-	github.com/prometheus/client_golang v1.4.0
-	github.com/prometheus/common v0.9.1
+	github.com/prometheus/client_golang v1.12.2
+	github.com/prometheus/common v0.32.1
 	github.com/rs/cors v1.7.0
 	github.com/ryanuber/columnize v2.1.1-0.20170703205827-abc90934186a+incompatible
 	github.com/ryanuber/go-glob v1.0.0
@@ -123,17 +122,13 @@ require (
 	github.com/syndtr/gocapability v0.0.0-20200815063812-42c35b437635
 	github.com/zclconf/go-cty v1.8.0
 	github.com/zclconf/go-cty-yaml v1.0.2
-	go.opencensus.io v0.22.1-0.20190713072201-b4a14686f0a9 // indirect
 	golang.org/x/crypto v0.0.0-20201002170205-7f63de1d35b0
-	golang.org/x/net v0.0.0-20201224014010-6772e930b67b
-	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
-	golang.org/x/sys v0.0.0-20210818153620-00dd8d7831e7
+	golang.org/x/net v0.0.0-20210525063256-abc453219eb5
+	golang.org/x/sync v0.0.0-20201207232520-09787c993a3a
+	golang.org/x/sys v0.0.0-20220114195835-da31bd327af9
 	golang.org/x/time v0.0.0-20200630173020-3af7569d3a1e
-	golang.org/x/tools v0.0.0-20200522201501-cb1345f3a375 // indirect
-	google.golang.org/api v0.13.0 // indirect
-	google.golang.org/grpc v1.29.1
+	google.golang.org/grpc v1.31.0
 	gopkg.in/check.v1 v1.0.0-20200227125254-8fa46927fb4f // indirect
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7
 	gopkg.in/tomb.v2 v2.0.0-20140626144623-14b3d72120e8
-	honnef.co/go/tools v0.0.1-2020.1.4 // indirect
 )
