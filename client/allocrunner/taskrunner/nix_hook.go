@@ -59,13 +59,21 @@ func (h *nixHook) Prestart(ctx context.Context, req *interfaces.TaskPrestartRequ
 		return nil
 	}
 
-	flakes := []string{}
-	flakeArgs := []string{}
-
 	configFlakeDeps, flakeDepsSet := req.Task.Config["flake_deps"]
 	configFlake, flakeSet := req.Task.Config["flake"]
 	configFlakeArgs, flakeArgsSet := req.Task.Config["flake_args"]
+	configStorePaths, storePathsSet := req.Task.Config["store_paths"]
 
+	storePaths := []string{}
+	if storePathsSet {
+		for _, sp := range configStorePaths.([]interface{}) {
+			storePaths = append(storePaths, sp.(string))
+		}
+
+		return h.buildStorePaths(storePaths)
+	}
+
+	flakes := []string{}
 	if flakeDepsSet {
 		for _, dep := range configFlakeDeps.([]interface{}) {
 			flakes = append(flakes, dep.(string))
@@ -76,6 +84,7 @@ func (h *nixHook) Prestart(ctx context.Context, req *interfaces.TaskPrestartRequ
 		flakes = append(flakes, configFlake.(string))
 	}
 
+	flakeArgs := []string{}
 	if flakeArgsSet {
 		flakeArgs = configFlakeArgs.([]string)
 	}
@@ -85,6 +94,17 @@ func (h *nixHook) Prestart(ctx context.Context, req *interfaces.TaskPrestartRequ
 	}
 
 	return h.install(flakes, flakeArgs, req.TaskDir.Dir)
+}
+
+// store paths are anything buildable really.
+// as well as /nix/store/<hash>-<name> which will be pulled from a substituter
+func (h *nixHook) buildStorePaths(storePaths []string) error {
+	h.logger.Debug("fetching store paths", "paths", storePaths)
+	h.emitEvent("Nix", "fetching store paths: "+strings.Join(storePaths, " "))
+
+	args := append([]string{"-L", "build", "--no-link"}, storePaths...)
+	cmd := exec.Command("nix", args...)
+	return cmd.Run()
 }
 
 // install takes a flake URL like:
