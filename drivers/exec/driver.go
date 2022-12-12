@@ -200,10 +200,10 @@ type TaskConfig struct {
 	// CapDrop is a set of linux capabilities to disable.
 	CapDrop []string `codec:"cap_drop"`
 
-	Flake      *string `codec:"flake"`
-	FlakeArgs  *string `codec:"flake_args"`
-	FlakeDeps  *string `codec:"flake_deps"`
-	StorePaths *string `codec:"store_paths"`
+	Flake      []string `codec:"flake"`
+	FlakeArgs  []string `codec:"flake_args"`
+	FlakeDeps  []string `codec:"flake_deps"`
+	StorePaths []string `codec:"store_paths"`
 }
 
 func (tc *TaskConfig) validate() error {
