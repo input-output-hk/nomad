@@ -14,6 +14,7 @@ import (
 	log "github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/nomad/client/allocrunner/interfaces"
 	"github.com/hashicorp/nomad/nomad/structs"
+	"github.com/hashicorp/nomad/plugins/drivers"
 )
 
 const (
@@ -69,6 +70,13 @@ func (h *nixHook) Prestart(ctx context.Context, req *interfaces.TaskPrestartRequ
 		for _, sp := range configStorePaths.([]interface{}) {
 			storePaths = append(storePaths, sp.(string))
 		}
+
+		resp.Mounts = append(resp.Mounts, &drivers.MountConfig{
+			TaskPath:        "/nix",
+			HostPath:        "/nix",
+			Readonly:        false,
+			PropagationMode: "host-to-task",
+		})
 
 		return h.buildStorePaths(storePaths)
 	}
