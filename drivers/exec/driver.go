@@ -83,16 +83,15 @@ var (
 	// taskConfigSpec is the hcl specification for the driver config section of
 	// a task within a job. It is returned in the TaskConfigSchema RPC
 	taskConfigSpec = hclspec.NewObject(map[string]*hclspec.Spec{
-		"command":     hclspec.NewAttr("command", "string", true),
-		"args":        hclspec.NewAttr("args", "list(string)", false),
-		"pid_mode":    hclspec.NewAttr("pid_mode", "string", false),
-		"ipc_mode":    hclspec.NewAttr("ipc_mode", "string", false),
-		"cap_add":     hclspec.NewAttr("cap_add", "list(string)", false),
-		"cap_drop":    hclspec.NewAttr("cap_drop", "list(string)", false),
-		"flake":       hclspec.NewAttr("flake", "string", false),
-		"flake_args":  hclspec.NewAttr("flake_args", "list(string)", false),
-		"flake_deps":  hclspec.NewAttr("flake_deps", "list(string)", false),
-		"store_paths": hclspec.NewAttr("store_paths", "list(string)", false),
+		"command":                  hclspec.NewAttr("command", "string", true),
+		"args":                     hclspec.NewAttr("args", "list(string)", false),
+		"pid_mode":                 hclspec.NewAttr("pid_mode", "string", false),
+		"ipc_mode":                 hclspec.NewAttr("ipc_mode", "string", false),
+		"cap_add":                  hclspec.NewAttr("cap_add", "list(string)", false),
+		"cap_drop":                 hclspec.NewAttr("cap_drop", "list(string)", false),
+		"nix_installables":         hclspec.NewAttr("nix_installables", "list(string)", false),
+		"nix_profile_install_args": hclspec.NewAttr("nix_profile_install_args", "list(string)", false),
+		"nix_host":                 hclspec.NewAttr("nix_host", "bool", false),
 	})
 
 	// driverCapabilities represents the RPC response for what features are
@@ -200,10 +199,9 @@ type TaskConfig struct {
 	// CapDrop is a set of linux capabilities to disable.
 	CapDrop []string `codec:"cap_drop"`
 
-	Flake      []string `codec:"flake"`
-	FlakeArgs  []string `codec:"flake_args"`
-	FlakeDeps  []string `codec:"flake_deps"`
-	StorePaths []string `codec:"store_paths"`
+	NixInstallables       []string `codec:"nix_installables"`
+	NixProfileInstallArgs []string `codec:"nix_profile_install_args"`
+	NixHost               bool     `codec:"nix_host"`
 }
 
 func (tc *TaskConfig) validate() error {
