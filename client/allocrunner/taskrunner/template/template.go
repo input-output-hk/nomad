@@ -220,7 +220,7 @@ func (tm *TaskTemplateManager) run() {
 	// Block till all the templates have been rendered
 	tm.handleFirstRender()
 
-	// Set o+r for all parent directories for each template inside the task dir.
+	// Set o+rw for all parent directories for each template inside the task dir.
 	for _, template := range tm.config.Templates {
 		destPath := template.DestPath
 		// TODO properly resolve all possible variables
@@ -251,7 +251,7 @@ func (tm *TaskTemplateManager) run() {
 			}
 
 			perm := info.Mode().Perm()
-			req := os.FileMode(0002) // other write
+			req := os.FileMode(0006) // o=rw
 			if perm&req != req {
 				if err := os.Chmod(dir, perm|req); err != nil {
 					tm.config.Lifecycle.Kill(context.Background(),
