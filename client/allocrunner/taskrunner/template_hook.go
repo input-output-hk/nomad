@@ -3,7 +3,14 @@ package taskrunner
 import (
 	"context"
 	"fmt"
+	"io/fs"
+	"os"
+	"os/user"
+	"path/filepath"
+	"strconv"
+	"strings"
 	"sync"
+	"syscall"
 
 	log "github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/nomad/client/allocrunner/interfaces"
@@ -11,6 +18,7 @@ import (
 	"github.com/hashicorp/nomad/client/allocrunner/taskrunner/template"
 	"github.com/hashicorp/nomad/client/config"
 	"github.com/hashicorp/nomad/client/taskenv"
+	"github.com/hashicorp/nomad/helper/users"
 	"github.com/hashicorp/nomad/nomad/structs"
 )
 
@@ -101,6 +109,40 @@ func (h *templateHook) Prestart(ctx context.Context, req *interfaces.TaskPrestar
 		h.vaultNamespace = req.Task.Vault.Namespace
 	}
 
+	var uid int
+	var gid int
+	{ // Default uid and gid of templates to the task user or nobody.
+		var user *user.User
+		{
+			var err error
+			if req.Task.User != "" {
+				if user, err = users.Lookup(req.Task.User); err != nil {
+					return fmt.Errorf("Couldn't look up user %q: %v", req.Task.User, err)
+				}
+			} else if user, err = users.Nobody(); err != nil {
+				return fmt.Errorf("Couldn't look up nobody user: %v", err)
+			}
+		}
+
+		if u, err := strconv.Atoi(user.Uid); err != nil {
+			return fmt.Errorf("Couldn't convert uid %q to int: %v", user.Uid, err)
+		} else if g, err := strconv.Atoi(user.Gid); err != nil {
+			return fmt.Errorf("Couldn't convert gid %q to int: %v", user.Gid, err)
+		} else {
+			uid = u
+			gid = g
+		}
+
+		for _, t := range h.config.templates {
+			if t.Uid == nil {
+				t.Uid = &uid
+			}
+			if t.Gid == nil {
+				t.Gid = &gid
+			}
+		}
+	}
+
 	unblockCh, err := h.newManager()
 	if err != nil {
 		return err
@@ -110,6 +152,52 @@ func (h *templateHook) Prestart(ctx context.Context, req *interfaces.TaskPrestar
 	select {
 	case <-ctx.Done():
 	case <-unblockCh:
+	}
+
+	// Set o+rw for all parent directories for each template inside the task dir
+	// and chown them to the task user or nobody (determined above).
+	for _, template := range h.config.templates {
+		destDir := strings.TrimPrefix(template.DestPath, "/")
+		for {
+			destDir, _ = filepath.Split(destDir)
+			if destDir == "" {
+				break
+			}
+
+			// strip trailing separator for the next filepath.Split()
+			destDir = destDir[:len(destDir)-1]
+
+			dir, escapes := req.TaskEnv.ClientPath(destDir, false)
+			if escapes {
+				return fmt.Errorf("Template dir escapes task dir: %s", destDir)
+			}
+
+			info, err := os.Lstat(dir)
+			if err != nil {
+				return fmt.Errorf("Failed to stat template dir: %v", err)
+			}
+			mode := info.Mode()
+
+			if mode.Type()&fs.ModeSymlink == fs.ModeSymlink {
+				continue
+			}
+
+			perm := mode.Perm()
+			req := os.FileMode(0006) // o=rw
+			if perm&req != req {
+				if err := os.Chmod(dir, perm|req); err != nil {
+					return fmt.Errorf("Failed to change template dir permissions: %v", err)
+				}
+			}
+
+			if stat, ok := info.Sys().(*syscall.Stat_t); ok {
+				if int(stat.Uid) != uid || int(stat.Gid) != gid {
+					if err = os.Lchown(dir, uid, gid); err != nil {
+						return err
+					}
+				}
+			}
+		}
 	}
 
 	return nil

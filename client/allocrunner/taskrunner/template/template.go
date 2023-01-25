@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
-	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -219,50 +218,6 @@ func (tm *TaskTemplateManager) run() {
 
 	// Block till all the templates have been rendered
 	tm.handleFirstRender()
-
-	// Set o+rw for all parent directories for each template inside the task dir.
-	for _, template := range tm.config.Templates {
-		destPath := template.DestPath
-		// TODO properly resolve all possible variables
-		// render path as template? https://github.com/hashicorp/consul-template/issues/974
-		destPath = strings.ReplaceAll(destPath, "${NOMAD_ALLOC_DIR}", "../alloc")
-		destPath = strings.ReplaceAll(destPath, "${NOMAD_TASK_DIR}", "/local")
-		destPath = strings.ReplaceAll(destPath, "${NOMAD_SECRETS_DIR}", "/secrets")
-
-		destDir := destPath
-		for {
-			destDir, _ = filepath.Split(destDir)
-			if destDir == "" {
-				break
-			}
-
-			// strip trailing separator for the next filepath.Split()
-			destDir = destDir[:len(destDir)-1]
-
-			dir := filepath.Join(tm.config.TaskDir, destDir)
-
-			info, err := os.Lstat(dir)
-			if err != nil {
-				tm.config.Lifecycle.Kill(context.Background(),
-					structs.NewTaskEvent(structs.TaskKilling).
-						SetFailsTask().
-						SetDisplayMessage(fmt.Sprintf("Template failed to stat template dir: %v", err)))
-				return
-			}
-
-			perm := info.Mode().Perm()
-			req := os.FileMode(0006) // o=rw
-			if perm&req != req {
-				if err := os.Chmod(dir, perm|req); err != nil {
-					tm.config.Lifecycle.Kill(context.Background(),
-						structs.NewTaskEvent(structs.TaskKilling).
-							SetFailsTask().
-							SetDisplayMessage(fmt.Sprintf("Template failed changing template dir permissions: %v", err)))
-					return
-				}
-			}
-		}
-	}
 
 	// Detect if there was a shutdown.
 	select {
