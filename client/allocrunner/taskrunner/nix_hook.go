@@ -27,14 +27,12 @@ type nixHook struct {
 	alloc    *structs.Allocation
 	runner   *TaskRunner
 	logger   log.Logger
-	firstRun bool
 }
 
 func newNixHook(runner *TaskRunner, logger log.Logger) *nixHook {
 	h := &nixHook{
 		alloc:    runner.Alloc(),
 		runner:   runner,
-		firstRun: true,
 	}
 	h.logger = logger.Named(h.Name())
 	return h
@@ -53,11 +51,9 @@ func (h *nixHook) emitEventError(event string, err error) {
 }
 
 func (h *nixHook) Prestart(ctx context.Context, req *interfaces.TaskPrestartRequest, resp *interfaces.TaskPrestartResponse) error {
-	if h.firstRun {
-		h.firstRun = false
-	} else {
-		return nil
-	}
+	defer func () {
+		resp.Done = true
+	}()
 
 	installables := []string{}
 	if v, set := req.Task.Config["nix_installables"]; set {
