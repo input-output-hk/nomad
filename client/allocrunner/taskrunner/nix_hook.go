@@ -24,15 +24,15 @@ const (
 
 // nixHook is used to prepare a task directory structure based on Nix packages
 type nixHook struct {
-	alloc    *structs.Allocation
-	runner   *TaskRunner
-	logger   log.Logger
+	alloc  *structs.Allocation
+	runner *TaskRunner
+	logger log.Logger
 }
 
 func newNixHook(runner *TaskRunner, logger log.Logger) *nixHook {
 	h := &nixHook{
-		alloc:    runner.Alloc(),
-		runner:   runner,
+		alloc:  runner.Alloc(),
+		runner: runner,
 	}
 	h.logger = logger.Named(h.Name())
 	return h
@@ -51,36 +51,60 @@ func (h *nixHook) emitEventError(event string, err error) {
 }
 
 func (h *nixHook) Prestart(ctx context.Context, req *interfaces.TaskPrestartRequest, resp *interfaces.TaskPrestartResponse) error {
-	defer func () {
+	defer func() {
 		resp.Done = true
 	}()
 
-	installables := []string{}
-	if v, set := req.Task.Config["nix_installables"]; set {
-		for _, vv := range v.([]interface{}) {
-			installables = append(installables, vv.(string))
+	getStrArr := func(key string) ([]string, error) {
+		v, set := req.Task.Config[key]
+		if !set {
+			return nil, nil
 		}
+
+		vs, ok := v.([]interface{})
+		if !ok {
+			return nil, fmt.Errorf("%s is not a list: %v", key, v)
+		}
+
+		var arr []string
+		for i, vv := range vs {
+			if vvs, ok := vv.(string); !ok {
+				return nil, fmt.Errorf("%s[%d] is not a string: %v", key, i, vv)
+			} else {
+				arr = append(arr, vvs)
+			}
+		}
+		return arr, nil
+	}
+
+	installables, err := getStrArr("nix_installables")
+	if err != nil {
+		return err
 	}
 
 	if len(installables) == 0 {
 		return nil
 	}
 
-	profileInstallArgs := []string{}
-	if v, set := req.Task.Config["nix_profile_install_args"]; set {
-		profileInstallArgs = v.([]string)
+	profileInstallArgs, err := getStrArr("nix_profile_install_args")
+	if err != nil {
+		return err
 	}
 
 	mount := false
-	if v, set := req.Task.Config["nix_host"]; set && v.(bool) {
-		mount = true
+	if v, set := req.Task.Config["nix_host"]; set {
+		if vv, ok := v.(bool); !ok {
+			return fmt.Errorf("nix_host is not a bool: %v", v)
+		} else if vv {
+			mount = true
 
-		resp.Mounts = append(resp.Mounts, &drivers.MountConfig{
-			TaskPath:        "/nix",
-			HostPath:        "/nix",
-			Readonly:        false,
-			PropagationMode: "host-to-task",
-		})
+			resp.Mounts = append(resp.Mounts, &drivers.MountConfig{
+				TaskPath:        "/nix",
+				HostPath:        "/nix",
+				Readonly:        false,
+				PropagationMode: "host-to-task",
+			})
+		}
 	}
 
 	return h.install(installables, profileInstallArgs, req.TaskDir.Dir, mount)
