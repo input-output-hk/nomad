@@ -6,13 +6,15 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"os/user"
 	"path/filepath"
+	"strconv"
 	"strings"
-	"syscall"
 
 	hclog "github.com/hashicorp/go-hclog"
 	log "github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/nomad/client/allocrunner/interfaces"
+	"github.com/hashicorp/nomad/helper/users"
 	"github.com/hashicorp/nomad/nomad/structs"
 	"github.com/hashicorp/nomad/plugins/drivers"
 )
@@ -107,7 +109,56 @@ func (h *nixHook) Prestart(ctx context.Context, req *interfaces.TaskPrestartRequ
 		}
 	}
 
-	return h.install(installables, profileInstallArgs, req.TaskDir.Dir, mount)
+	var uid int
+	var gid int
+	{ // Default uid and gid of /nix to the task user or nobody.
+		var user *user.User
+		{
+			var err error
+			if req.Task.User != "" {
+				if user, err = users.Lookup(req.Task.User); err != nil {
+					return fmt.Errorf("Couldn't look up user %q: %v", req.Task.User, err)
+				}
+			} else if user, err = users.Nobody(); err != nil {
+				return fmt.Errorf("Couldn't look up nobody user: %v", err)
+			}
+		}
+
+		if u, err := strconv.Atoi(user.Uid); err != nil {
+			return fmt.Errorf("Couldn't convert uid %q to int: %v", user.Uid, err)
+		} else if g, err := strconv.Atoi(user.Gid); err != nil {
+			return fmt.Errorf("Couldn't convert gid %q to int: %v", user.Gid, err)
+		} else {
+			uid = u
+			gid = g
+		}
+	}
+
+	if err := h.install(installables, profileInstallArgs, req.TaskDir.Dir, mount, uid, gid); err != nil {
+		return err
+	}
+
+	if !mount {
+		// Create NIX_STATE_DIR so that nix recognizes /nix.
+		// https://github.com/NixOS/nix/blob/673fe85976b00a6324697b2db4a5d12a7ef57829/src/libstore/store-api.cc#L1391
+		if err := os.MkdirAll(req.TaskDir.Dir+"/nix/var/nix", 0755); err != nil {
+			return err
+		}
+
+		// Chown nix directories.
+		for _, p := range []string{
+			"/nix/var/nix",
+			"/nix/var",
+			"/nix",
+			"/nix/store",
+		} {
+			if err := os.Chown(req.TaskDir.Dir+p, uid, gid); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }
 
 // install takes an installable like:
@@ -117,7 +168,7 @@ func (h *nixHook) Prestart(ctx context.Context, req *interfaces.TaskPrestartRequ
 // /nix/store/<hash>-<name>
 //
 // the given installable
-func (h *nixHook) install(installables []string, profileInstallArgs []string, taskDir string, mounted bool) error {
+func (h *nixHook) install(installables []string, profileInstallArgs []string, taskDir string, mounted bool, uid, gid int) error {
 	linkPath := filepath.Join(taskDir, "current-alloc")
 	_, err := os.Stat(linkPath)
 	if err == nil {
@@ -126,13 +177,6 @@ func (h *nixHook) install(installables []string, profileInstallArgs []string, ta
 
 	h.logger.Debug("Building", "installable", installables)
 	h.emitEvent("Nix", "building: "+strings.Join(installables, " "))
-
-	taskDirInfo, err := os.Stat(taskDir)
-	if err != nil {
-		return err
-	}
-
-	uid, gid := getOwner(taskDirInfo)
 
 	for _, installable := range installables {
 		if err = h.profileInstall(linkPath, installable, profileInstallArgs); err != nil {
@@ -148,7 +192,7 @@ func (h *nixHook) install(installables []string, profileInstallArgs []string, ta
 
 		// Now copy each dependency into the allocation /nix/store directory
 		for _, requisit := range requisites {
-			h.logger.Debug("linking", "requisit", requisit)
+			h.logger.Debug("copying", "requisit", requisit)
 
 			err = filepath.Walk(requisit, installAll(h.logger, taskDir, false, false, uid, gid))
 			if err != nil {
@@ -252,7 +296,10 @@ func installAll(logger hclog.Logger, targetDir string, truncate, link bool, uid,
 
 		if info.IsDir() {
 			// logger.Debug("d", "dst", dst)
-			return os.MkdirAll(dst, 0777)
+			if err := os.MkdirAll(dst, 0777); err != nil {
+				return err
+			}
+			return os.Chown(dst, uid, gid)
 		}
 
 		if link {
@@ -278,24 +325,16 @@ func installAll(logger hclog.Logger, targetDir string, truncate, link bool, uid,
 			defer dstfd.Close()
 
 			if _, err = io.Copy(dstfd, srcfd); err != nil {
-				return err
+				return fmt.Errorf("Couldn't copy %q to %q: %v", path, dst, err)
 			}
 
 			if err := dstfd.Chown(uid, gid); err != nil {
-				return fmt.Errorf("Couldn't copy %q to %q: %v", path, dst, err)
+				return fmt.Errorf("Couldn't chown %q: %v", dst, err)
 			}
 		}
 
 		return nil
 	}
-}
-
-func getOwner(fi os.FileInfo) (int, int) {
-	stat, ok := fi.Sys().(*syscall.Stat_t)
-	if !ok {
-		return -1, -1
-	}
-	return int(stat.Uid), int(stat.Gid)
 }
 
 // SplitPath splits a file path into its directories and filename.
